@@ -1,10 +1,11 @@
 package main
 
 import (
-	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"fmt"
 	"os"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 var (
@@ -19,12 +20,15 @@ type model struct {
 	choices    []string
 	cursor     int
 	selected   map[int]struct{}
+	list       listModel
+	showList   bool
 }
 
 func initialModel() model {
 	return model{
 		choices:  []string{"Open in Shell", "Open in app Window"},
 		selected: make(map[int]struct{}),
+		list:     initialListModel(),
 	}
 }
 
@@ -32,37 +36,77 @@ func (m model) Init() tea.Cmd {
 	return nil
 }
 
+func (m model) Echap() (tea.Model, tea.Cmd) {
+	return m, tea.Quit
+}
+
+func (m model) Suspend() (tea.Model, tea.Cmd) {
+	m.suspending = true
+	return m, tea.Suspend
+}
+
+func (m model) Screen() (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.altscreen = !m.altscreen
+	return m, cmd
+}
+
+func (m model) MoveUp() (tea.Model, tea.Cmd) {
+	if m.cursor > 0 {
+		m.cursor--
+	}
+}
+
+func (m model) MoveDown() (tea.Model, tea.Cmd) {
+	if m.cursor < len(m.choices)-1 {
+		m.cursor++
+	}
+}
+
+func (m model) Select() (tea.Model, tea.Cmd) {
+	if m.cursor == 0 {
+		m.showList = true
+		return m, nil
+	}
+	_, ok := m.selected[m.cursor]
+	if ok {
+		delete(m.selected, m.cursor)
+	} else {
+		m.selected[m.cursor] = struct{}{}
+	}
+	return m, nil
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.showList {
+		if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
+			m.showList = false
+			return m, nil
+		}
+		updatedList, cmd := m.list.Update(msg)
+		m.list = updatedList.(listModel)
+		return m, cmd
+	}
+	commands := map[string]func() (tea.Model, tea.Cmd){
+		"ctrl+c": m.Echap,
+		"q":      m.Echap,
+		"esc":    m.Echap,
+		"ctrl+z": m.Suspend,
+		"space":  m.Screen,
+		"up":     m.MoveUp,
+		"k":      m.MoveUp,
+		"down":   m.MoveDown,
+		"j":      m.MoveDown,
+		"enter":  m.Select,
+	}
+
 	switch msg := msg.(type) {
 	case tea.ResumeMsg:
 		m.suspending = false
 		return m, nil
 	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "ctrl+c", "q", "esc":
-			return m, tea.Quit
-		case "ctrl+z":
-			m.suspending = true
-			return m, tea.Suspend
-		case "space":
-			var cmd tea.Cmd
-			m.altscreen = !m.altscreen
-			return m, cmd
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case "down", "j":
-			if m.cursor < len(m.choices)-1 {
-				m.cursor++
-			}
-		case "enter":
-			_, ok := m.selected[m.cursor]
-			if ok {
-				delete(m.selected, m.cursor)
-			} else {
-				m.selected[m.cursor] = struct{}{}
-			}
+		if command, ok := commands[msg.String()]; ok {
+			return command()
 		}
 	}
 	return m, nil
@@ -111,6 +155,9 @@ func (m model) ViewNewScreen() tea.View {
 }
 
 func (m model) View() tea.View {
+	if m.showList {
+		return m.list.View()
+	}
 	return m.ViewNewScreen()
 }
 
