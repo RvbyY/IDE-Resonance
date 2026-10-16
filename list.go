@@ -22,11 +22,11 @@ func newStyles(darkBG bool) styles {
 		app: lipgloss.NewStyle().
 			Padding(1, 2),
 		title: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFDF5")).
-			Background(lipgloss.Color("#25A065")).
+			Foreground(lipgloss.Color("#161615")).
+			Background(lipgloss.Color("#FAD962")).
 			Padding(0, 1),
 		statusMessage: lipgloss.NewStyle().
-			Foreground(lightDark(lipgloss.Color("#04B575"), lipgloss.Color("#04B575"))),
+			Foreground(lightDark(lipgloss.Color("#FAD962"), lipgloss.Color("#FAD962"))),
 	}
 }
 
