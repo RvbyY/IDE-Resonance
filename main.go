@@ -22,6 +22,8 @@ type model struct {
 	selected   map[int]struct{}
 	list       listModel
 	showList   bool
+	editor     EditorModel
+	editorOpen bool
 }
 
 func initialModel() model {
@@ -29,11 +31,15 @@ func initialModel() model {
 		choices:  []string{"Open in Shell", "Open in app Window"},
 		selected: make(map[int]struct{}),
 		list:     initialListModel(),
+		editor:   newModel(),
 	}
 }
 
 func (m model) Init() tea.Cmd {
-	return m.list.Init()
+	return tea.Batch(
+		m.list.Init(),
+		m.editor.Init(),
+	)
 }
 
 func (m model) Echap() (tea.Model, tea.Cmd) {
@@ -79,6 +85,20 @@ func (m model) Select() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m model) OpenSelectedPreset() (tea.Model, tea.Cmd) {
+	selected := m.list.list.SelectedItem()
+	preset, ok := selected.(item)
+
+	if !ok {
+		return m, nil
+	}
+	m.editor.inputs[0].SetValue(preset.title)
+	m.editor.inputs[1].SetValue(preset.description)
+	m.showList = false
+	m.editorOpen = true
+	return m, m.editor.Init()
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	commands := map[string]func() (tea.Model, tea.Cmd){
 		"ctrl+c": m.Echap,
@@ -94,12 +114,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.showList {
-		if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
-			m.showList = false
-			return m, nil
+		if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+			switch keyMsg.String() {
+			case "esc":
+				m.showList = false
+				return m, nil
+			case "enter":
+				return m.OpenSelectedPreset()
+			}
 		}
 		updatedList, cmd := m.list.Update(msg)
 		m.list = updatedList.(listModel)
+		return m, cmd
+	}
+	if m.editorOpen {
+		if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
+			m.editorOpen = false
+			return m, nil
+		}
+		updatedEditor, cmd := m.editor.Update(msg)
+		m.editor = updatedEditor.(EditorModel)
 		return m, cmd
 	}
 	switch msg := msg.(type) {
@@ -159,6 +193,9 @@ func (m model) ViewNewScreen() tea.View {
 func (m model) View() tea.View {
 	if m.showList {
 		return m.list.View()
+	}
+	if m.editorOpen {
+		return m.editor.View()
 	}
 	return m.ViewNewScreen()
 }
