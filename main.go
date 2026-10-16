@@ -166,7 +166,7 @@ func (m model) View() tea.View {
 func main() {
 	p := tea.NewProgram(initialModel())
 	if _, err := p.Run(); err != nil {
-		fmt.Printf("Alas, there's been an error: %v", err)
+		fmt.Printf("Oh, there's been an error: %v", err)
 		os.Exit(84)
 	}
 }
