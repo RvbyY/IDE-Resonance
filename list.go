@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"os"
 	"sync"
 
 	"charm.land/bubbles/v2/key"

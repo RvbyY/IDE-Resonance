@@ -33,7 +33,7 @@ func initialModel() model {
 }
 
 func (m model) Init() tea.Cmd {
-	return nil
+	return m.list.Init()
 }
 
 func (m model) Echap() (tea.Model, tea.Cmd) {
@@ -55,12 +55,14 @@ func (m model) MoveUp() (tea.Model, tea.Cmd) {
 	if m.cursor > 0 {
 		m.cursor--
 	}
+	return m, nil
 }
 
 func (m model) MoveDown() (tea.Model, tea.Cmd) {
 	if m.cursor < len(m.choices)-1 {
 		m.cursor++
 	}
+	return m, nil
 }
 
 func (m model) Select() (tea.Model, tea.Cmd) {
@@ -78,15 +80,6 @@ func (m model) Select() (tea.Model, tea.Cmd) {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if m.showList {
-		if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
-			m.showList = false
-			return m, nil
-		}
-		updatedList, cmd := m.list.Update(msg)
-		m.list = updatedList.(listModel)
-		return m, cmd
-	}
 	commands := map[string]func() (tea.Model, tea.Cmd){
 		"ctrl+c": m.Echap,
 		"q":      m.Echap,
@@ -100,6 +93,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		"enter":  m.Select,
 	}
 
+	// if _, ok := msg.(tea.WindowSizeMsg); ok {
+	// 	updatedList, cmd := m.list.Update(msg)
+	// 	m.list = updatedList.(listModel)
+
+	// 	if !m.showList {
+	// 		return m, cmd
+	// 	}
+	// }
+	if m.showList {
+		if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
+			m.showList = false
+			return m, nil
+		}
+		updatedList, cmd := m.list.Update(msg)
+		m.list = updatedList.(listModel)
+		return m, cmd
+	}
 	switch msg := msg.(type) {
 	case tea.ResumeMsg:
 		m.suspending = false
