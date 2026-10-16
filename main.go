@@ -93,14 +93,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		"enter":  m.Select,
 	}
 
-	// if _, ok := msg.(tea.WindowSizeMsg); ok {
-	// 	updatedList, cmd := m.list.Update(msg)
-	// 	m.list = updatedList.(listModel)
-
-	// 	if !m.showList {
-	// 		return m, cmd
-	// 	}
-	// }
 	if m.showList {
 		if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
 			m.showList = false

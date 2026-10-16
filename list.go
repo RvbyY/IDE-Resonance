@@ -183,7 +183,7 @@ func initialListModel() listModel {
 
 	// Make initial list of items.
 	var itemGenerator randomItemGenerator
-	const numItems = 24
+	const numItems = 6
 	items := make([]list.Item, numItems)
 	for i := range numItems {
 		items[i] = itemGenerator.next()
@@ -192,7 +192,7 @@ func initialListModel() listModel {
 	// Setup list.
 	delegate := newItemDelegate(delegateKeys, &m.styles)
 	groceryList := list.New(items, delegate, 0, 0)
-	groceryList.Title = "Groceries"
+	groceryList.Title = "Preset"
 	groceryList.Styles.Title = m.styles.title
 	groceryList.AdditionalFullHelpKeys = func() []key.Binding {
 		return []key.Binding{
