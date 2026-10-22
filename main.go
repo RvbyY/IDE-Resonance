@@ -129,6 +129,7 @@ func (m model) IsShowList(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) IsEditorOpen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
 		m.editorOpen = false
+		m.showList = true
 		return m, nil
 	}
 	updatedEditor, cmd := m.editor.Update(msg)
