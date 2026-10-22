@@ -99,19 +99,22 @@ func (m model) OpenSelectedPreset() (tea.Model, tea.Cmd) {
 	return m, m.editor.Init()
 }
 
+func (m model) ResizeWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
+	updatedList, listCmd := m.list.Update(msg)
+	m.list = updatedList.(listModel)
+	cmds = append(cmds, listCmd)
+	updatedEditor, listCmd := m.editor.Update(msg)
+	m.editor = updatedEditor.(EditorModel)
+	cmds = append(cmds, listCmd)
+	return m, tea.Batch(cmds...)
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(tea.WindowSizeMsg); ok {
-		var cmds []tea.Cmd
-
-		updatedList, listCmd := m.list.Update(msg)
-		m.list = updatedList.(listModel)
-		cmds = append(cmds, listCmd)
-		updatedEditor, listCmd := m.editor.Update(msg)
-		m.editor = updatedEditor.(EditorModel)
-		cmds = append(cmds, listCmd)
-		return m, tea.Batch(cmds...)
+		return m.ResizeWindow(msg)
 	}
-
 	commands := map[string]func() (tea.Model, tea.Cmd){
 		"ctrl+c": m.Echap,
 		"q":      m.Echap,
