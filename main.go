@@ -111,45 +111,46 @@ func (m model) ResizeWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+func (m model) IsShowList(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+		switch keyMsg.String() {
+		case "esc":
+			m.showList = false
+			return m, nil
+		case "enter":
+			return m.OpenSelectedPreset()
+		}
+	}
+	updatedList, cmd := m.list.Update(msg)
+	m.list = updatedList.(listModel)
+	return m, cmd
+}
+
+func (m model) IsEditorOpen(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
+		m.editorOpen = false
+		return m, nil
+	}
+	updatedEditor, cmd := m.editor.Update(msg)
+	m.editor = updatedEditor.(EditorModel)
+	return m, cmd
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	commands := map[string]func() (tea.Model, tea.Cmd){
+		"ctrl+c": m.Echap, "q": m.Echap, "esc": m.Echap,
+		"ctrl+z": m.Suspend, "space": m.Screen, "up": m.MoveUp,
+		"k": m.MoveUp, "down": m.MoveDown, "j": m.MoveDown, "enter": m.Select,
+	}
+
 	if _, ok := msg.(tea.WindowSizeMsg); ok {
 		return m.ResizeWindow(msg)
 	}
-	commands := map[string]func() (tea.Model, tea.Cmd){
-		"ctrl+c": m.Echap,
-		"q":      m.Echap,
-		"esc":    m.Echap,
-		"ctrl+z": m.Suspend,
-		"space":  m.Screen,
-		"up":     m.MoveUp,
-		"k":      m.MoveUp,
-		"down":   m.MoveDown,
-		"j":      m.MoveDown,
-		"enter":  m.Select,
-	}
-
 	if m.showList {
-		if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
-			switch keyMsg.String() {
-			case "esc":
-				m.showList = false
-				return m, nil
-			case "enter":
-				return m.OpenSelectedPreset()
-			}
-		}
-		updatedList, cmd := m.list.Update(msg)
-		m.list = updatedList.(listModel)
-		return m, cmd
+		return m.IsShowList(msg)
 	}
 	if m.editorOpen {
-		if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
-			m.editorOpen = false
-			return m, nil
-		}
-		updatedEditor, cmd := m.editor.Update(msg)
-		m.editor = updatedEditor.(EditorModel)
-		return m, cmd
+		return m.IsEditorOpen(msg)
 	}
 	switch msg := msg.(type) {
 	case tea.ResumeMsg:
