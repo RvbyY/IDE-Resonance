@@ -95,11 +95,9 @@ func (m listModel) Init() tea.Cmd {
 }
 
 func (m *listModel) updateListProperties() {
-	// Update list size.
 	h, v := m.styles.app.GetFrameSize()
-	m.list.SetSize(m.width-h, m.height-v)
 
-	// Update the listModel and list styles.
+    m.list.SetSize(m.width-h, m.height-v)
 	m.styles = newStyles(m.darkBG)
 	m.list.Styles.Title = m.styles.title
 }
@@ -121,7 +119,6 @@ func (m listModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		// Don't match any of the keys below if we're actively filtering.
 		if m.list.FilterState() == list.Filtering {
 			break
 		}
@@ -158,12 +155,9 @@ func (m listModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(insCmd, statusCmd)
 		}
 	}
-
-	// This will also call our delegate's update function.
 	newListModel, cmd := m.list.Update(msg)
 	m.list = newListModel
 	cmds = append(cmds, cmd)
-
 	return m, tea.Batch(cmds...)
 }
 
@@ -174,22 +168,17 @@ func (m listModel) View() tea.View {
 }
 
 func initialListModel() listModel {
-	// Initialize the listModel and list.
 	m := listModel{}
-	m.styles = newStyles(false) // default to dark background styles
-
+	m.styles = newStyles(false)
 	delegateKeys := newDelegateKeyMap()
 	listKeys := newListKeyMap()
-
-	// Make initial list of items.
 	var itemGenerator randomItemGenerator
 	const numItems = 6
 	items := make([]list.Item, numItems)
-	for i := range numItems {
+
+    for i := range numItems {
 		items[i] = itemGenerator.next()
 	}
-
-	// Setup list.
 	delegate := newItemDelegate(delegateKeys, &m.styles)
 	groceryList := list.New(items, delegate, 0, 0)
 	groceryList.Title = "Preset"
@@ -204,11 +193,9 @@ func initialListModel() listModel {
 			listKeys.toggleHelpMenu,
 		}
 	}
-
 	m.list = groceryList
 	m.keys = listKeys
 	m.delegateKeys = delegateKeys
 	m.itemGenerator = &itemGenerator
-
 	return m
 }
