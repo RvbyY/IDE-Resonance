@@ -147,12 +147,12 @@ func newModel() EditorModel {
 		help:   help.New(),
 		keymap: keymap{
 			next: key.NewBinding(
-				key.WithKeys("tab"),
-				key.WithHelp("tab", "next"),
+				key.WithKeys("ctrl+tab"),
+				key.WithHelp("ctrl+tab", "next"),
 			),
 			prev: key.NewBinding(
-				key.WithKeys("shift+tab"),
-				key.WithHelp("shift+tab", "prev"),
+				key.WithKeys("shift+ctrl+tab"),
+				key.WithHelp("shift+ctrl+tab", "prev"),
 			),
 			add: key.NewBinding(
 				key.WithKeys("ctrl+n"),
