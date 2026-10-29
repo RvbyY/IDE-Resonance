@@ -111,13 +111,18 @@ func (m model) ResizeWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+func isEscape(msg tea.KeyPressMsg) bool {
+	k := msg.Key()
+	return k.Code == tea.KeyEscape || (k.Code == '[' && k.Mod&tea.ModCtrl != 0)
+}
+
 func (m model) IsShowList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
-		switch keyMsg.String() {
-		case "esc":
+		switch {
+		case isEscape(keyMsg):
 			m.showList = false
 			return m, nil
-		case "enter":
+		case keyMsg.String() == "enter":
 			return m.OpenSelectedPreset()
 		}
 	}
@@ -127,10 +132,12 @@ func (m model) IsShowList(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) IsEditorOpen(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
-		m.editorOpen = false
-		m.showList = true
-		return m, nil
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && isEscape(keyMsg) {
+		if !m.editor.saving {
+			m.editorOpen = false
+			m.showList = true
+			return m, nil
+		}
 	}
 	updatedEditor, cmd := m.editor.Update(msg)
 	m.editor = updatedEditor.(EditorModel)
@@ -139,7 +146,7 @@ func (m model) IsEditorOpen(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	commands := map[string]func() (tea.Model, tea.Cmd){
-		"ctrl+c": m.Echap, "q": m.Echap, "esc": m.Echap,
+		"ctrl+c": m.Echap, "q": m.Echap,
 		"ctrl+z": m.Suspend, "space": m.Screen, "up": m.MoveUp,
 		"k": m.MoveUp, "down": m.MoveDown, "j": m.MoveDown, "enter": m.Select,
 	}
@@ -158,6 +165,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.suspending = false
 		return m, nil
 	case tea.KeyPressMsg:
+		if isEscape(msg) {
+			return m.Echap()
+		}
 		if command, ok := commands[msg.String()]; ok {
 			return command()
 		}

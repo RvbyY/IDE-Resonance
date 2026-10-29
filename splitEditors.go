@@ -139,6 +139,9 @@ type EditorModel struct {
 	saving    bool
 	saveFocus int
 	status    string
+	files 	  []string
+	fileIndex int
+	showFiles bool
 }
 
 func newModel() EditorModel {
@@ -232,10 +235,12 @@ func (m *EditorModel) beginSave() tea.Cmd {
 }
 
 func (m *EditorModel) updateSave(msg tea.KeyPressMsg) tea.Cmd {
-	switch msg.String() {
-	case "esc":
+	if isEscape(msg) {
 		m.saving = false
 		return nil
+	}
+
+	switch msg.String() {
 	case "tab", "down":
 		m.filenames[m.saveFocus].Blur()
 		m.saveFocus = (m.saveFocus + 1) % len(m.filenames)
