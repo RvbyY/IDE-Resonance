@@ -89,11 +89,15 @@ func (m model) OpenSelectedPreset() (tea.Model, tea.Cmd) {
 	selected := m.list.list.SelectedItem()
 	preset, ok := selected.(item)
 
-	if !ok {
+	if !ok || len(m.editor.inputs) == 0 {
 		return m, nil
 	}
 	m.editor.inputs[0].SetValue(preset.title)
-	m.editor.inputs[1].SetValue(preset.description)
+	if len(m.editor.inputs) > 1 {
+		m.editor.inputs[1].SetValue(preset.description)
+	} else {
+		m.editor.inputs[0].SetValue(preset.title + "\n\n" + preset.description)
+	}
 	m.showList = false
 	m.editorOpen = true
 	return m, m.editor.Init()
