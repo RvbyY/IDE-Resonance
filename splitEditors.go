@@ -128,30 +128,47 @@ func newFilenameInput() textinput.Model {
 	return input
 }
 
+type focusArea int
+
+const (
+	focusFiles focusArea = iota
+	focusEditor
+)
+
 type EditorModel struct {
-	width     int
-	height    int
-	keymap    keymap
-	help      help.Model
-	inputs    []textarea.Model
-	focus     int
-	filenames []textinput.Model
-	saving    bool
-	saveFocus int
-	status    string
-	files 	  []string
-	fileIndex int
-	showFiles bool
+	width       int
+	height      int
+	keymap      keymap
+	help        help.Model
+	inputs      []textarea.Model
+	focus       focusArea
+	editorIndex int
+	filenames   []textinput.Model
+	saving      bool
+	saveFocus   int
+	status      string
+	files       []string
+	fileIndex   int
+	showFiles   bool
 }
 
 func newModel() EditorModel {
+	files, err := listFiles(".")
+	if err != nil {
+		files = nil
+	}
+
 	m := EditorModel{
-		inputs: make([]textarea.Model, initialInputs),
-		help:   help.New(),
+		files:       files,
+		fileIndex:   0,
+		focus:       focusFiles,
+		editorIndex: 0,
+		inputs:      make([]textarea.Model, initialInputs),
+		help:        help.New(),
 		keymap: keymap{
 			next: key.NewBinding(
-				key.WithKeys("ctrl+tab"),
-				key.WithHelp("ctrl+tab", "next"),
+				key.WithKeys("ctrl+alt+tab"),
+				key.WithHelp("ctrl+alt+tab", "next"),
 			),
 			prev: key.NewBinding(
 				key.WithKeys("shift+ctrl+tab"),
@@ -178,7 +195,7 @@ func newModel() EditorModel {
 	for i := range initialInputs {
 		m.inputs[i] = newTextarea()
 	}
-	m.inputs[m.focus].Focus()
+	m.inputs[m.editorIndex].Focus()
 	m.updateKeybindings()
 	return m
 }
@@ -194,22 +211,22 @@ func (m *EditorModel) KeymapQuit(cmds []tea.Cmd) {
 }
 
 func (m *EditorModel) KeyMapNext(cmds []tea.Cmd) {
-	m.inputs[m.focus].Blur()
-	m.focus++
-	if m.focus > len(m.inputs)-1 {
-		m.focus = 0
+	m.inputs[m.editorIndex].Blur()
+	m.editorIndex++
+	if m.editorIndex > len(m.inputs)-1 {
+		m.editorIndex = 0
 	}
-	cmd := m.inputs[m.focus].Focus()
+	cmd := m.inputs[m.editorIndex].Focus()
 	cmds = append(cmds, cmd)
 }
 
 func (m *EditorModel) KeyMapPrev(cmds []tea.Cmd) {
-	m.inputs[m.focus].Blur()
-	m.focus--
-	if m.focus < 0 {
-		m.focus = len(m.inputs) - 1
+	m.inputs[m.editorIndex].Blur()
+	m.editorIndex--
+	if m.editorIndex < 0 {
+		m.editorIndex = len(m.inputs) - 1
 	}
-	cmd := m.inputs[m.focus].Focus()
+	cmd := m.inputs[m.editorIndex].Focus()
 	cmds = append(cmds, cmd)
 }
 
@@ -219,8 +236,8 @@ func (m *EditorModel) KeymapAdd(cmds []tea.Cmd) {
 
 func (m *EditorModel) KeymapRemove(cmds []tea.Cmd) {
 	m.inputs = m.inputs[:len(m.inputs)-1]
-	if m.focus > len(m.inputs)-1 {
-		m.focus = len(m.inputs) - 1
+	if m.editorIndex > len(m.inputs)-1 {
+		m.editorIndex = len(m.inputs) - 1
 	}
 }
 
@@ -266,13 +283,35 @@ func (m *EditorModel) updateSave(msg tea.KeyPressMsg) tea.Cmd {
 	return cmd
 }
 
+func (m EditorModel) updateSaving(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		return m, m.updateSave(msg)
+	case filesSavedMsg:
+		m.saving = false
+		m.status = fmt.Sprintf("Saved %d file(s)", msg.count)
+	case saveErrorMsg:
+		m.saving = false
+		m.status = msg.err.Error()
+	}
+	return m, nil
+}
+
+func (m EditorModel) updatedFiles(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	commands := map[string]func() (tea.Model, tea.Cmd){
+		"up": m.moveFileUp, "down": m.moveFileDown,
+		"ctrl+tab": m.fileListToEditor, "enter": m.selectFile,
+	}
+
+	if command, ok := commands[msg.String()]; ok {
+		return command()
+	}
+	return m, nil
+}
+
 func (m EditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
-	events := map[*key.Binding]func([]tea.Cmd){
-		&m.keymap.quit: m.KeymapQuit,
-		&m.keymap.next: m.KeyMapNext,
-		&m.keymap.prev: m.KeyMapPrev,
-		&m.keymap.add:  m.KeymapAdd,
+	if m.saving {
+		return m.updateSaving(msg)
 	}
 
 	switch msg := msg.(type) {
@@ -282,6 +321,27 @@ func (m EditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case fileOpenErrorMsg:
 		m.status = msg.err.Error()
+	case tea.KeyPressMsg:
+		switch m.focus {
+		case focusFiles:
+			return m.updatedFiles(msg)
+		case focusEditor:
+			return m.updatedEditor(msg)
+		}
+	}
+	return m, nil
+}
+
+func (m EditorModel) updatedEditor(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	events := map[*key.Binding]func([]tea.Cmd){
+		&m.keymap.quit: m.KeymapQuit,
+		&m.keymap.next: m.KeyMapNext,
+		&m.keymap.prev: m.KeyMapPrev,
+		&m.keymap.add:  m.KeymapAdd,
+	}
+
+	switch msg := msg.(type) {
 	case filesSavedMsg:
 		m.status = fmt.Sprintf("Saved %d file(s)", msg.count)
 	case saveErrorMsg:
@@ -333,6 +393,20 @@ func (m EditorModel) inputViews() []string {
 	return views
 }
 
+func (m EditorModel) ViewFilesTab() (string, string) {
+	filePane := lipgloss.NewStyle().
+		Width(25).
+		Height(m.height).
+		Padding(1).
+		Render(m.fileListView())
+	editorPane := lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		m.inputViews()...,
+	)
+
+	return filePane, editorPane
+}
+
 func (m EditorModel) View() tea.View {
 	if m.saving {
 		var views []string
@@ -352,7 +426,12 @@ func (m EditorModel) View() tea.View {
 		m.keymap.quit,
 	})
 
-	content := lipgloss.JoinHorizontal(lipgloss.Top, m.inputViews()...) + "\n\n" + help
+	filePane, editorPane := m.ViewFilesTab()
+	content := lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		filePane,
+		editorPane,
+	) + "\n\n" + help
 	if m.status != "" {
 		content += "\n" + m.status
 	}
@@ -362,14 +441,14 @@ func (m EditorModel) View() tea.View {
 }
 
 func (m EditorModel) Cursor() *tea.Cursor {
-	focusedInput := m.inputs[m.focus]
+	focusedInput := m.inputs[m.editorIndex]
 
 	if focusedInput.VirtualCursor() {
 		return nil
 	}
 	views := m.inputViews()
 	c := focusedInput.Cursor()
-	for i := range m.focus {
+	for i := range m.editorIndex {
 		c.X += lipgloss.Width(views[i])
 	}
 	return c
@@ -412,4 +491,53 @@ func (m model) OpenFile(filename string) (tea.Model, tea.Cmd) {
 		m.editor.Init(),
 		openFileCmd(filename),
 	)
+}
+
+func (m EditorModel) fileListView() string {
+	var result strings.Builder
+
+	result.WriteString("Files\n\n")
+	for i, filename := range m.files {
+		cursor := " "
+		if i == m.fileIndex {
+			cursor = "> "
+		}
+		if m.focus == focusFiles && i == m.fileIndex {
+			filename = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("212")).
+				Render(filename)
+		}
+		fmt.Fprintf(&result, "%s%s\n", cursor, filename)
+	}
+	return result.String()
+}
+
+func (m EditorModel) moveFileUp() (tea.Model, tea.Cmd) {
+	if m.fileIndex > 0 {
+		m.fileIndex--
+	}
+	return m, nil
+}
+
+func (m EditorModel) moveFileDown() (tea.Model, tea.Cmd) {
+	if m.fileIndex < len(m.files)-1 {
+		m.fileIndex++
+	}
+	return m, nil
+}
+
+func (m EditorModel) fileListToEditor() (tea.Model, tea.Cmd) {
+	m.focus = focusEditor
+	m.inputs[m.editorIndex].Focus()
+
+	return m, nil
+}
+
+func (m EditorModel) selectFile() (tea.Model, tea.Cmd) {
+	if len(m.files) == 0 {
+		return m, nil
+	}
+
+	filename := m.files[m.fileIndex]
+	return m, openFileAtCmd(filename, m.editorIndex)
 }
