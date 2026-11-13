@@ -170,12 +170,12 @@ func newModel() EditorModel {
 		help:           help.New(),
 		keymap: keymap{
 			next: key.NewBinding(
-				key.WithKeys("ctrl+alt+tab"),
-				key.WithHelp("ctrl+alt+tab", "next"),
+				key.WithKeys("ctrl+right"),
+				key.WithHelp("ctrl+right", "next editor"),
 			),
 			prev: key.NewBinding(
-				key.WithKeys("shift+ctrl+tab"),
-				key.WithHelp("shift+ctrl+tab", "prev"),
+				key.WithKeys("ctrl+left"),
+				key.WithHelp("ctrl+left", "previous editor"),
 			),
 			add: key.NewBinding(
 				key.WithKeys("ctrl+n"),
@@ -195,13 +195,14 @@ func newModel() EditorModel {
 			),
 			files: key.NewBinding(
 				key.WithKeys("ctrl+tab", "ctrl+o"),
-				key.WithHelp("ctrl+o", "files"),
+				key.WithHelp("ctrl+o", "toggle files"),
 			),
 		},
 	}
 	for i := range initialInputs {
 		m.inputs[i] = newTextarea()
 	}
+	m.showFiles = true
 	m.inputs[m.editorIndex].Focus()
 	m.updateKeybindings()
 	return m
@@ -223,8 +224,15 @@ func (m *EditorModel) KeymapQuit(cmds []tea.Cmd) {
 }
 
 func (m *EditorModel) KeymapFiles(cmds []tea.Cmd) {
-	m.inputs[m.editorIndex].Blur()
-	m.focus = focusFiles
+	m.showFiles = !m.showFiles
+	m.sizeInputs()
+	if m.showFiles {
+		m.inputs[m.editorIndex].Blur()
+		m.focus = focusFiles
+		return
+	}
+	m.focus = focusEditor
+	m.inputs[m.editorIndex].Focus()
 }
 
 func (m *EditorModel) KeyMapNext(cmds []tea.Cmd) {
@@ -339,6 +347,16 @@ func (m EditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case fileOpenedMsg:
+		if msg.index >= 0 && msg.index < len(m.inputs) {
+			m.inputs[msg.index].SetValue(msg.content)
+			if msg.index >= len(m.storefilenames) {
+				m.storefilenames = append(m.storefilenames,
+					make([]string, msg.index-len(m.storefilenames)+1)...)
+			}
+			m.storefilenames[msg.index] = msg.filename
+			m.editorIndex = msg.index
+		}
 	case fileOpenErrorMsg:
 		m.status = msg.err.Error()
 	case tea.WindowSizeMsg:
@@ -396,7 +414,10 @@ func (m EditorModel) updatedEditor(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *EditorModel) sizeInputs() {
-	editorWidth := max(m.width, 0)
+	editorWidth := max(m.width-filePaneWidth, 0)
+	if !m.showFiles {
+		editorWidth = max(m.width, 0)
+	}
 	editorHeight := max(m.height-helpHeight, 0)
 	for i := range m.inputs {
 		m.inputs[i].SetWidth(editorWidth / len(m.inputs))
@@ -419,6 +440,8 @@ func (m EditorModel) inputViews() []string {
 
 func (m EditorModel) ViewFilesTab() (string, string) {
 	filePane := lipgloss.NewStyle().
+		Width(filePaneWidth).
+		Height(max(m.height-helpHeight, 0)).
 		Padding(1, 2).
 		Render(m.fileListView())
 	editorPane := lipgloss.JoinHorizontal(
@@ -449,8 +472,13 @@ func (m EditorModel) View() tea.View {
 		m.keymap.files,
 	})
 
-	_, editorPane := m.ViewFilesTab()
-	content := editorPane + "\n\n" + help
+	filePane, editorPane := m.ViewFilesTab()
+	editorPane = m.editorTabs() + "\n" + editorPane
+	content := editorPane
+	if m.showFiles {
+		content = lipgloss.JoinHorizontal(lipgloss.Top, filePane, editorPane)
+	}
+	content += "\n\n" + help
 	if m.status != "" {
 		content += "\n" + m.status
 	}
@@ -515,7 +543,6 @@ func (m model) OpenFile(filename string) (tea.Model, tea.Cmd) {
 func (m EditorModel) fileListView() string {
 	var result strings.Builder
 
-	result.WriteString("Files\n\n")
 	for i, filename := range m.files {
 		cursor := " "
 		if i == m.fileIndex {

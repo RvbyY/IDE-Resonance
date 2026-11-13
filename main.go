@@ -24,7 +24,6 @@ type model struct {
 	showList   bool
 	editor     EditorModel
 	editorOpen bool
-	tab        modelTab
 }
 
 func initialModel() model {
@@ -33,7 +32,6 @@ func initialModel() model {
 		selected: make(map[int]struct{}),
 		list:     initialListModel(),
 		editor:   newModel(),
-		tab:      initialTabModel(),
 	}
 }
 
@@ -41,7 +39,6 @@ func (m model) Init() tea.Cmd {
 	return tea.Batch(
 		m.list.Init(),
 		m.editor.Init(),
-		m.tab.InitTab(),
 	)
 }
 
@@ -103,7 +100,6 @@ func (m model) OpenSelectedPreset() (tea.Model, tea.Cmd) {
 	}
 	m.showList = false
 	m.editorOpen = true
-	m.tab.activeTab = 1
 	return m, m.editor.Init()
 }
 
@@ -149,76 +145,7 @@ func (m model) IsEditorOpen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	updatedEditor, cmd := m.editor.Update(msg)
 	m.editor = updatedEditor.(EditorModel)
-	m.updatedEditorTabTitle()
 	return m, cmd
-}
-
-func (m *model) updatedEditorTabTitle() {
-	filename := "untitled"
-
-	if m.editor.editorIndex >= 0 &&
-		m.editor.editorIndex < len(m.editor.storefilenames) &&
-		m.editor.storefilenames[m.editor.editorIndex] != "" {
-		filename = m.editor.storefilenames[m.editor.editorIndex]
-	}
-	if len(m.tab.Tabs) > 1 {
-		m.tab.Tabs[1] = filename
-	}
-}
-
-func (m model) editorOpenEvent(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if m.editor.saving {
-		updated, cmd := m.editor.Update(msg)
-		m.editor = updated.(EditorModel)
-		return m, cmd
-	}
-
-	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
-		if isEscape(keyMsg) && !m.editor.saving {
-			m.editorOpen = false
-			m.showList = true
-			return m, nil
-		}
-		switch keyMsg.String() {
-		case "tab", "right", "l":
-			m.tab.activeTab = min(m.tab.activeTab+1, 1)
-			m.editor.focus = focusEditor
-			m.editor.inputs[m.editor.editorIndex].Focus()
-			return m, nil
-
-		case "shift+tab", "left", "h":
-			m.tab.activeTab = max(m.tab.activeTab-1, 0)
-			m.editor.focus = focusFiles
-			m.editor.inputs[m.editor.editorIndex].Blur()
-			return m, nil
-		}
-	}
-	if m.tab.activeTab == 0 {
-		updated, cmd := m.editor.Update(msg)
-		m.editor = updated.(EditorModel)
-		return m, cmd
-	}
-	updated, cmd := m.editor.Update(msg)
-	m.editor = updated.(EditorModel)
-	return m, cmd
-}
-
-func (m model) fileOpenEvent(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case fileOpenedMsg:
-		if msg.index >= 0 && msg.index < len(m.editor.inputs) {
-			m.editor.inputs[msg.index].SetValue(msg.content)
-			if msg.index >= len(m.editor.storefilenames) {
-				m.editor.storefilenames = append(m.editor.storefilenames,
-					make([]string, msg.index-len(m.editor.storefilenames)+1)...)
-			}
-			m.editor.storefilenames[msg.index] = msg.filename
-			m.editor.editorIndex = msg.index
-			m.tab.activeTab = 1
-			m.updatedEditorTabTitle()
-		}
-	}
-	return m, nil
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -231,14 +158,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(tea.WindowSizeMsg); ok {
 		return m.ResizeWindow(msg)
 	}
-	if _, ok := msg.(fileOpenedMsg); ok {
-		return m.fileOpenEvent(msg)
-	}
 	if m.showList {
 		return m.IsShowList(msg)
 	}
 	if m.editorOpen {
-		return m.editorOpenEvent(msg)
+		return m.IsEditorOpen(msg)
 	}
 	switch msg := msg.(type) {
 	case tea.ResumeMsg:
@@ -302,7 +226,7 @@ func (m model) View() tea.View {
 		return m.list.View()
 	}
 	if m.editorOpen {
-		return m.viewTab()
+		return m.editor.View()
 	}
 	return m.ViewNewScreen()
 }
