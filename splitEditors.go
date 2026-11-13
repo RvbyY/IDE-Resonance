@@ -137,20 +137,21 @@ const (
 )
 
 type EditorModel struct {
-	width       int
-	height      int
-	keymap      keymap
-	help        help.Model
-	inputs      []textarea.Model
-	focus       focusArea
-	editorIndex int
-	filenames   []textinput.Model
-	saving      bool
-	saveFocus   int
-	status      string
-	files       []string
-	fileIndex   int
-	showFiles   bool
+	width          int
+	height         int
+	keymap         keymap
+	help           help.Model
+	inputs         []textarea.Model
+	focus          focusArea
+	editorIndex    int
+	filenames      []textinput.Model
+	storefilenames []string
+	saving         bool
+	saveFocus      int
+	status         string
+	files          []string
+	fileIndex      int
+	showFiles      bool
 }
 
 func newModel() EditorModel {
@@ -160,12 +161,13 @@ func newModel() EditorModel {
 	}
 
 	m := EditorModel{
-		files:       files,
-		fileIndex:   0,
-		focus:       focusFiles,
-		editorIndex: 0,
-		inputs:      make([]textarea.Model, initialInputs),
-		help:        help.New(),
+		files:          files,
+		fileIndex:      0,
+		focus:          focusFiles,
+		editorIndex:    0,
+		inputs:         make([]textarea.Model, initialInputs),
+		storefilenames: []string{""},
+		help:           help.New(),
 		keymap: keymap{
 			next: key.NewBinding(
 				key.WithKeys("ctrl+alt+tab"),
@@ -247,6 +249,7 @@ func (m *EditorModel) KeyMapPrev(cmds []tea.Cmd) {
 
 func (m *EditorModel) KeymapAdd(cmds []tea.Cmd) {
 	m.inputs = append(m.inputs, newTextarea())
+	m.storefilenames = append(m.storefilenames, "")
 }
 
 func (m *EditorModel) KeymapRemove(cmds []tea.Cmd) {
@@ -254,6 +257,7 @@ func (m *EditorModel) KeymapRemove(cmds []tea.Cmd) {
 		return
 	}
 	m.inputs = m.inputs[:len(m.inputs)-1]
+	m.storefilenames = m.storefilenames[:len(m.storefilenames)-1]
 	if m.editorIndex > len(m.inputs)-1 {
 		m.editorIndex = len(m.inputs) - 1
 	}
@@ -335,10 +339,6 @@ func (m EditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case fileOpenedMsg:
-		if msg.index >= 0 && msg.index < len(m.inputs) {
-			m.inputs[msg.index].SetValue(msg.content)
-		}
 	case fileOpenErrorMsg:
 		m.status = msg.err.Error()
 	case tea.WindowSizeMsg:
@@ -366,7 +366,6 @@ func (m EditorModel) updatedEditor(msg tea.Msg) (tea.Model, tea.Cmd) {
 		&m.keymap.add:    m.KeymapAdd,
 		&m.keymap.remove: m.KeymapRemove,
 	}
-
 	switch msg := msg.(type) {
 	case filesSavedMsg:
 		m.status = fmt.Sprintf("Saved %d file(s)", msg.count)
@@ -397,7 +396,7 @@ func (m EditorModel) updatedEditor(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *EditorModel) sizeInputs() {
-	editorWidth := max(m.width-filePaneWidth, 0)
+	editorWidth := max(m.width, 0)
 	editorHeight := max(m.height-helpHeight, 0)
 	for i := range m.inputs {
 		m.inputs[i].SetWidth(editorWidth / len(m.inputs))
@@ -420,16 +419,14 @@ func (m EditorModel) inputViews() []string {
 
 func (m EditorModel) ViewFilesTab() (string, string) {
 	filePane := lipgloss.NewStyle().
-		Width(filePaneWidth).
-		Height(max(m.height-helpHeight, 0)).
-		Padding(1).
+		Padding(1, 2).
 		Render(m.fileListView())
 	editorPane := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		m.inputViews()...,
 	)
 
-	return filePane, editorPane
+	return filePane, lipgloss.NewStyle().Padding(1, 2).Render(editorPane)
 }
 
 func (m EditorModel) View() tea.View {
@@ -452,12 +449,8 @@ func (m EditorModel) View() tea.View {
 		m.keymap.files,
 	})
 
-	filePane, editorPane := m.ViewFilesTab()
-	content := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		filePane,
-		editorPane,
-	) + "\n\n" + help
+	_, editorPane := m.ViewFilesTab()
+	content := editorPane + "\n\n" + help
 	if m.status != "" {
 		content += "\n" + m.status
 	}
